@@ -1,40 +1,39 @@
-# zimage2 — AI Image Generator
+# zimage2 — Online AI Image Studio
 
-zimage2 is an Android text-to-image app using a real remote inference backend: Cloudflare Workers AI with Stable Diffusion XL Base 1.0.
+zimage2 is a browser-based and Android text-to-image app. The online site is deployed with GitHub Pages; generation is performed by a separately deployed API.
 
-## Current architecture
+## Models
 
-- Android app: responsive WebView UI; sends prompt/style/size to your deployed API and saves returned images.
-- Backend: `server/` Cloudflare Worker calls the hosted model `@cf/stabilityai/stable-diffusion-xl-base-1.0`.
-- The APK does **not** contain model weights. Generation needs an internet connection and a deployed Worker.
+- **FLUX.1-dev** — higher-quality hosted model through Hugging Face Inference Providers. Requires an HF token and may incur charges after any included credits.
+- **FLUX.1 Schnell** — faster model through Cloudflare Workers AI.
+- **Stable Diffusion XL** — alternate Cloudflare Workers AI model.
 
-## Model and license
+No large model weights are packaged into the website or APK. The models run on remote GPU inference services, so internet and available provider quota/billing are required. Hugging Face's current pricing and credits: https://huggingface.co/docs/inference-providers/pricing
 
-The SDXL Base 1.0 model card lists the **CreativeML Open RAIL++-M** license, not Apache 2.0. Review the full license and acceptable-use terms before using or distributing the app: https://huggingface.co/stabilityai/stable-diffusion-xl-base-1.0
+## Deploy the online website
 
-Official Cloudflare model/API documentation: https://developers.cloudflare.com/workers-ai/models/stable-diffusion-xl-base-1.0/
+The repository contains `web/index.html`. The workflow `.github/workflows/pages.yml` deploys it to GitHub Pages. In GitHub, open **Settings → Pages** and set the build/deployment source to **GitHub Actions** if it is not already selected. Then open **Actions** and check **Deploy zimage2 online web app**. The resulting Pages URL appears in the workflow deployment environment.
 
-## Deploy the backend (free tier if eligible)
+## Deploy the image API
 
-1. Create a Cloudflare account and enable Workers AI.
-2. On a computer with Node.js installed, open the `server` directory.
-3. Run `npm install`, then `npx wrangler login`, then `npm run deploy`.
-4. Copy the deployed `https://…workers.dev` URL.
-5. Install zimage2 and paste that URL in **Image engine → zimage2 API base URL**. Tap **Save & test connection**, then generate.
+1. Create/enable a Cloudflare account with Workers AI.
+2. Install Node.js, open a terminal in `server/`, then run `npm install`, `npx wrangler login`, and `npm run deploy`.
+3. For the heavy FLUX.1-dev model, create a Hugging Face fine-grained token with **Make calls to Inference Providers** permission: https://huggingface.co/settings/tokens
+4. In the `server/` directory, set the token as a Cloudflare Worker secret (do not place it in frontend code):
+   ```sh
+   npx wrangler secret put HF_TOKEN
+   ```
+   Paste the token when prompted. Then deploy again with `npm run deploy`.
+5. Verify `https://YOUR-WORKER.workers.dev/health` returns JSON with `"ok": true`.
+6. In zimage2's **Image engine** section, use that Worker URL and select **FLUX.1-dev**.
 
-Cloudflare currently lists a free allocation of 10,000 Neurons per day for Workers AI; limits and pricing may change. Check https://developers.cloudflare.com/workers-ai/platform/pricing/. Requests can fail after quota is exhausted.
+**Security:** Never commit or expose the Hugging Face token in the website, APK, GitHub source, or chat. Store it only as the Worker secret. The current API uses permissive CORS and has no user authentication/rate limit; add abuse controls before public production use.
 
 ## Build the Android APK
 
-1. Open the repository's **Actions** tab.
-2. Select **Build zimage2 APK** and run the workflow, or push a commit to `main`.
-3. After the workflow succeeds, download the `zimage2-debug-apk` artifact.
+Open **Actions**, run **Build zimage2 APK**, and download the `zimage2-debug-apk` artifact after the run succeeds. A source commit is not proof that a build or live generation test succeeded.
 
-A successful source commit does not mean the APK build passed. Check Actions for the actual result. The app can compile without a deployed backend, but image generation cannot work until the Worker is deployed.
+## API
 
-## API endpoints
-
-- `GET /health` — status and model identifier.
-- `POST /generate` with JSON `{"prompt":"a fox in a moonlit forest","size":512,"style":"digital painting"}` — returns PNG image bytes.
-
-This starter Worker has open CORS and no authentication/rate limiting. Before sharing a public deployment widely, add abuse controls and monitor usage.
+- `GET /health` — health and available model names.
+- `POST /generate` — JSON body such as `{"prompt":"a fox in a moonlit forest","size":768,"style":"digital painting","model":"fluxdev"}`; returns PNG image bytes when successful.
