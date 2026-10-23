@@ -1,4 +1,4 @@
-export interface Env { AI: Ai }
+export interface Env { AI: Ai; HF_TOKEN?: string }
 
 const MODELS = {
   sdxl: "@cf/stabilityai/stable-diffusion-xl-base-1.0",
@@ -91,7 +91,7 @@ export default {
     if (body.prompt.length > 1500) return json({ error: "Prompt must be 1,500 characters or fewer." }, 400);
 
     const requestedModel = typeof body.model === "string" ? body.model : "flux";
-    if (!(requestedModel in MODELS)) return json({ error: "Unknown model. Choose sdxl or flux." }, 400);
+    if (!(requestedModel in MODELS)) return json({ error: "Unknown model. Choose fluxdev, flux, or sdxl." }, 400);\n    if (requestedModel === "fluxdev" && !env.HF_TOKEN) return json({ error: "The heavy FLUX.1-dev model needs a Hugging Face token.", hint: "Create a token with Inference Providers permission and set it as the Worker secret HF_TOKEN." }, 503);
     const modelKey = requestedModel as ModelKey;
     const model = MODELS[modelKey];
     const requestedSize = Number(body.size ?? 512);
