@@ -19,6 +19,49 @@ function json(body: unknown, status = 200) {
   });
 }
 
+function isReadableStream(value: unknown): value is ReadableStream<Uint8Array> {
+  return typeof value === "object" && value !== null && "getReader" in value;
+}
+
+function decodeBase64(value: string): Uint8Array {
+  const clean = value.replace(/^data:image\\/[^;]+;base64,/i, "");
+  const binary = atob(clean);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+  return bytes;
+}
+
+async function imageResponse(result: unknown, model: string): Promise<Response> {
+  if (result instanceof Response) {
+    if (!result.ok) throw new Error("Model returned HTTP " + result.status);
+    const type = result.headers.get("content-type") || "image/png";
+    if (type.includes("json")) {
+      const parsed: unknown = await result.json();
+      return imageResponse(parsed, model);
+    }
+    if (!result.body) throw new Error("Model returned an empty response body");
+    return new Response(result.body, { status: 200, headers: { ...cors, "Content-Type": type, "Cache-Control": "no-store", "X-Zimage2-Model": model } });
+  }
+  if (result instanceof Uint8Array || result instanceof ArrayBuffer) {
+    return new Response(result, { headers: { ...cors, "Content-Type": "image/png", "Cache-Control": "no-store", "X-Zimage2-Model": model } });
+  }
+  if (isReadableStream(result)) {
+    return new Response(result, { headers: { ...cors, "Content-Type": "image/png", "Cache-Control": "no-store", "X-Zimage2-Model": model } });
+  }
+  if (typeof result === "object" && result !== null) {
+    const obj = result as Record<string, unknown>;
+    const image = obj.image ?? obj.output ?? obj.data;
+    if (image instanceof Uint8Array || image instanceof ArrayBuffer || isReadableStream(image)) {
+      return new Response(image, { headers: { ...cors, "Content-Type": "image/png", "Cache-Control": "no-store", "X-Zimage2-Model": model } });
+    }
+    if (typeof image === "string") {
+      const bytes = decodeBase64(image);
+      return new Response(bytes, { headers: { ...cors, "Content-Type": "image/png", "Cache-Control": "no-store", "X-Zimage2-Model": model } });
+    }
+  }
+  throw new Error("Unsupported image response format from model");
+}
+
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     const url = new URL(request.url);
@@ -28,10 +71,10 @@ export default {
       return json({
         ok: true,
         app: "zimage2",
-        model: MODELS.sdxl,
+        model: MODELS.flux,
         models: [
-          { id: "sdxl", name: "Stable Diffusion XL", model: MODELS.sdxl },
-          { id: "flux", name: "FLUX.1 Schnell", model: MODELS.flux }
+          { id: "flux", name: "FLUX.1 Schnell", model: MODELS.flux },
+          { id: "sdxl", name: "Stable Diffusion XL", model: MODELS.sdxl }
         ],
         task: "text-to-image",
         hosting: "Cloudflare Workers AI (open-weight models; internet required)"
@@ -47,7 +90,7 @@ export default {
     if (typeof body.prompt !== "string" || !body.prompt.trim()) return json({ error: "A non-empty prompt is required." }, 400);
     if (body.prompt.length > 1500) return json({ error: "Prompt must be 1,500 characters or fewer." }, 400);
 
-    const requestedModel = typeof body.model === "string" ? body.model : "sdxl";
+    const requestedModel = typeof body.model === "string" ? body.model : "flux";
     if (!(requestedModel in MODELS)) return json({ error: "Unknown model. Choose sdxl or flux." }, 400);
     const modelKey = requestedModel as ModelKey;
     const model = MODELS[modelKey];
@@ -61,12 +104,7 @@ export default {
         ? { prompt, width: size, height: size, num_steps: 4 }
         : { prompt, negative_prompt: "low quality, blurry, distorted, watermark, text", width: size, height: size, num_steps: 20, guidance: 7.5 };
       const result = await env.AI.run(model, input);
-      const image = result instanceof Response ? result.body : result;
-      if (!image) return json({ error: "The model returned an empty image.", model }, 502);
-      return new Response(image as BodyInit, {
-        status: 200,
-        headers: { ...cors, "Content-Type": "image/png", "Cache-Control": "no-store", "X-Zimage2-Model": model }
-      });
+      return await imageResponse(result, model);
     } catch (error) {
       const message = error instanceof Error ? error.message : "Unknown inference error";
       const quota = /quota|limit|billing|exhaust/i.test(message);
