@@ -1,6 +1,6 @@
-# Dreamer — AI Image Generator
+# zimage2 — AI Image Generator
 
-Dreamer is an Android text-to-image app using a real remote inference backend: Cloudflare Workers AI with Stable Diffusion XL Base 1.0.
+zimage2 is an Android text-to-image app using a real remote inference backend: Cloudflare Workers AI with Stable Diffusion XL Base 1.0.
 
 ## Current architecture
 
@@ -20,15 +20,15 @@ Official Cloudflare model/API documentation: https://developers.cloudflare.com/w
 2. On a computer with Node.js installed, open the `server` directory.
 3. Run `npm install`, then `npx wrangler login`, then `npm run deploy`.
 4. Copy the deployed `https://…workers.dev` URL.
-5. Install Dreamer and paste that URL in **Image engine → Dreamer API base URL**. Tap **Save & test connection**, then generate.
+5. Install zimage2 and paste that URL in **Image engine → zimage2 API base URL**. Tap **Save & test connection**, then generate.
 
 Cloudflare currently lists a free allocation of 10,000 Neurons per day for Workers AI; limits and pricing may change. Check https://developers.cloudflare.com/workers-ai/platform/pricing/. Requests can fail after quota is exhausted.
 
 ## Build the Android APK
 
 1. Open the repository's **Actions** tab.
-2. Select **Build Dreamer APK** and run the workflow, or push a commit to `main`.
-3. After the workflow succeeds, download the `dreamer-debug-apk` artifact.
+2. Select **Build zimage2 APK** and run the workflow, or push a commit to `main`.
+3. After the workflow succeeds, download the `zimage2-debug-apk` artifact.
 
 A successful source commit does not mean the APK build passed. Check Actions for the actual result. The app can compile without a deployed backend, but image generation cannot work until the Worker is deployed.
 
