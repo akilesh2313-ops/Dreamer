@@ -1,26 +1,34 @@
 # Dreamspace Life
 
-A separate, mobile-friendly AI companion website inside this repository. The existing Android app and root website files are left untouched.
+A mobile-friendly fictional AI companion and life-partner creator hosted as a Cloudflare Worker with static assets.
 
-## Included
-- Life-partner creator with name, appearance style, personality, and feature preferences
-- Character profile and conversation memory saved in browser local storage
-- Companion chat UI with a Cloudflare Worker API
-- Image studio with prompt generation and image history
+## Features
+- Life-partner creator with name, appearance style, personality, and preferences
+- Character profile, chat history, and memory notes saved in browser local storage
+- Companion chat API using Cloudflare Workers AI
+- AI portrait generation API using Cloudflare Workers AI
 - Browser speech input/output where supported
+- Optional 18+ video URL library: users must confirm adulthood and add their own direct video URLs; the project does not host or supply videos
 
-## Deploy to Cloudflare Workers
-1. Open the `dreamspace-life` directory.
-2. Install Node.js, then run `npm install`.
-3. Sign in using `npx wrangler login`.
-4. Ensure Workers AI is enabled for your Cloudflare account.
-5. Run `npm run deploy`.
-6. Open the deployed `*.workers.dev` URL and test chat and image generation.
+## Deploy automatically from GitHub
+The workflow at `.github/workflows/deploy-dreamspace-life.yml` deploys this project whenever files under `dreamspace-life/` change on `main`.
 
-The AI routes use the Workers AI binding configured in `wrangler.toml`. Model access and image response formats can vary by account; test the health endpoint first. Do not put private API keys in frontend code.
+1. In Cloudflare, create an API token with permission to deploy Workers and access the target account.
+2. In GitHub, open **Settings → Secrets and variables → Actions** for this repository.
+3. Add repository secrets:
+   - `CLOUDFLARE_API_TOKEN` — the token from Cloudflare
+   - `CLOUDFLARE_ACCOUNT_ID` — your Cloudflare account ID
+4. Open **Actions → Deploy Dreamspace Life → Run workflow**, or push a change to `dreamspace-life/`.
+5. Open the deployment log to find the deployed `workers.dev` URL.
 
-## Local preview
-Run `npm run dev` from this directory.
+## Deploy locally
+1. Install Node.js.
+2. Run `cd dreamspace-life && npm install`.
+3. Run `npx wrangler login`.
+4. Run `npm run dev` for local preview or `npm run deploy` to deploy.
 
-## Data and boundaries
-Profiles, chat messages, and memory notes are stored in the current browser only. The website is a companion UI, not a human relationship. Provider policies and model limitations still apply.
+## AI requirements
+Workers AI must be enabled for the Cloudflare account. The chat and image model identifiers in `src/worker.js` may need adjustment based on current model availability and account access. Test `/api/health` after deployment. If generation fails, inspect the Worker logs and verify model availability and quota.
+
+## Privacy and content
+Profiles, chat messages, memory notes, and saved video URLs are stored in the user's current browser. The age prompt is not formal age verification. Use only legal content involving consenting adults, and only URLs you have permission to access or share. Do not commit credentials or private API keys to this repository.
