@@ -32,6 +32,21 @@
 <p class="small">For adults only. Add direct video URLs that you have the right to access or share. This tool does not host or supply videos; third-party URLs remain subject to their own terms and laws.</p>
 <div id="ageGate"><label class="check" style="display:block;margin:12px 0"><input type="checkbox" id="ageConfirm"> I confirm I am 18 or older and will only use lawful, consensual adult content.</label><button id="unlockVideos">Enter 18+ area</button></div>
 <div id="videoArea" class="hidden"><div class="field"><label>VIDEO URL (MP4 / WEBM)</label><input id="videoUrl" type="url" placeholder="https://example.com/video.mp4"></div><div style="display:flex;gap:8px;flex-wrap:wrap"><button id="addVideo">Add to my library</button><button class="secondary" id="clearVideos">Clear library</button></div><div id="videoLibrary" style="display:grid;gap:12px;margin-top:14px"></div><p class="small">Only direct media URLs are supported. This simple age gate is a reminder, not formal age verification.</p></div></section>
+<section class="card" id="aiVideoSection">
+<h2>🎬 AI cinematic video studio</h2>
+<p class="small">Generate short, non-explicit romantic videos featuring clearly adult fictional characters. Requires a configured provider key and prepaid provider balance. Review the estimated price before submitting.</p>
+<div id="aiVideoLocked"><p class="small">Confirm your age in the Adult video library above to unlock this studio.</p></div>
+<div id="aiVideoArea" class="hidden">
+<div class="field"><label for="aiVideoPrompt">SCENE PROMPT</label><textarea id="aiVideoPrompt" maxlength="3000">Two clearly adult fictional partners share a romantic slow dance in a candlelit room, cinematic camera movement, tasteful clothing, warm lighting, non-explicit.</textarea></div>
+<div class="field"><label for="aiVideoModel">VIDEO QUALITY</label><select id="aiVideoModel"><option value="seahorse-480p">480p — $0.944 per 5 seconds</option><option value="seahorse-720p">720p — $1.386 per 5 seconds</option><option value="seahorse-1080p">1080p — $2.714 per 5 seconds</option></select></div>
+<div class="field"><label for="aiVideoDuration">DURATION</label><select id="aiVideoDuration"><option value="5">5 seconds</option><option value="8">8 seconds</option><option value="10">10 seconds</option><option value="12">12 seconds</option><option value="15">15 seconds</option></select></div>
+<div class="field"><label for="aiVideoRatio">VIDEO FORMAT</label><select id="aiVideoRatio"><option value="16:9">Landscape (16:9)</option><option value="9:16">Vertical mobile (9:16)</option><option value="1:1">Square (1:1)</option></select></div>
+<p class="small" id="aiVideoEstimate">Estimated cost: about $0.94 USD for 5 seconds at 480p. Provider prices can change.</p>
+<button id="generateVideo">Generate video</button>
+<p class="status" id="aiVideoStatus" role="status"></p>
+<div id="aiVideoResult" class="hidden"></div>
+</div>
+</section>
 <footer>Dreamspace Life is a fictional AI companion experience. It cannot guarantee a real relationship. Provider policies and model limits still apply. Never share sensitive personal information in chat.</footer>
 </div>
 <script>
@@ -61,6 +76,18 @@ $('unlockVideos').onclick=()=>{if(!$('ageConfirm').checked){alert('Please confir
 $('addVideo').onclick=()=>{try{const u=new URL($('videoUrl').value.trim());if(!['https:','http:'].includes(u.protocol))throw new Error();const arr=getVideos();arr.push(u.href);localStorage.setItem(VIDEO_KEY,JSON.stringify(arr));$('videoUrl').value='';renderVideos()}catch(e){$('spaceStatus').textContent='Enter a valid http(s) video URL.'}};
 $('clearVideos').onclick=()=>{if(confirm('Remove all saved video URLs from this browser?')){localStorage.removeItem(VIDEO_KEY);renderVideos()}};
 $('reset').onclick=()=>{if(confirm('Clear this browser’s Dreamspace Life profile and chats?')){localStorage.removeItem(KEY);partner=null;messages=[];$('partner').classList.remove('show');renderChat();$('spaceStatus').textContent='Local data cleared.'}};
+
+// AI video studio: provider key stays on the Worker; generation is asynchronous and billed by the provider.
+const videoUnlocked=()=>!$('videoArea').classList.contains('hidden');
+function updateVideoEstimate(){const rate={'seahorse-480p':0.1888,'seahorse-720p':0.2773,'seahorse-1080p':0.5428}[$('aiVideoModel').value]||0.1888;const duration=Number($('aiVideoDuration').value)||5;$('aiVideoEstimate').textContent='Estimated cost: about 
+})();
+</script></body></html>+(rate*duration).toFixed(2)+' USD for this clip. Provider prices may change; the provider charges when you submit.'}
+$('aiVideoModel').addEventListener('change',updateVideoEstimate);
+$('aiVideoDuration').addEventListener('change',updateVideoEstimate);
+const unlockVideosOriginal=$('unlockVideos').onclick;
+$('unlockVideos').onclick=()=>{if(!$('ageConfirm').checked){alert('Please confirm you are 18 or older.');return}$('ageGate').classList.add('hidden');$('videoArea').classList.remove('hidden');$('aiVideoLocked').classList.add('hidden');$('aiVideoArea').classList.remove('hidden');renderVideos();updateVideoEstimate()};
+$('generateVideo').onclick=async()=>{if(!videoUnlocked()||!$('ageConfirm').checked){$('aiVideoStatus').textContent='Confirm you are 18 or older in the video library first.';return}const prompt=$('aiVideoPrompt').value.trim();if(!prompt){$('aiVideoStatus').textContent='Enter a scene prompt first.';return}const btn=$('generateVideo');btn.disabled=true;$('aiVideoResult').classList.add('hidden');$('aiVideoStatus').textContent='Submitting task…';try{const response=await fetch('/api/video-generate',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({ageConfirmed:true,prompt,model:$('aiVideoModel').value,duration:Number($('aiVideoDuration').value),ratio:$('aiVideoRatio').value})});const task=await response.json();if(!response.ok)throw new Error(task.error||'Could not start generation');if(!task.id)throw new Error('Provider did not return a task ID');$('aiVideoStatus').textContent='Task '+task.id+' queued. This may take several minutes.';let result=null;for(let i=0;i<120;i++){await new Promise(resolve=>setTimeout(resolve,5000));const poll=await fetch('/api/video-status?id='+encodeURIComponent(task.id));const status=await poll.json();if(!poll.ok)throw new Error(status.error||'Status check failed');if(status.status==='succeeded'){result=status;break}if(status.status==='failed'||status.status==='cancelled')throw new Error(typeof status.error==='string'?status.error:'Video generation failed.');const step=status.step?.code||status.status||'processing';$('aiVideoStatus').textContent='Video rendering: '+step+'…'}if(!result)throw new Error('Generation is still running. Your task ID is '+task.id+'. Try checking again later.');if(!result.video_url)throw new Error('Task finished but no video link was returned.');const box=$('aiVideoResult');box.innerHTML='';const video=document.createElement('video');video.controls=true;video.playsInline=true;video.preload='metadata';video.src=result.video_url;video.style.width='100%';video.style.borderRadius='12px';const link=document.createElement('a');link.href=result.video_url;link.target='_blank';link.rel='noopener noreferrer';link.textContent='Open generated video (provider link may expire in 7 days)';link.style.display='block';link.style.marginTop='10px';const saveBtn=document.createElement('button');saveBtn.className='secondary';saveBtn.style.marginTop='10px';saveBtn.textContent='Save link to my video library';saveBtn.onclick=()=>{const arr=getVideos();if(!arr.includes(result.video_url)){arr.push(result.video_url);localStorage.setItem(VIDEO_KEY,JSON.stringify(arr));renderVideos()}$('aiVideoStatus').textContent='Video link saved in this browser.'};box.append(video,link,saveBtn);box.classList.remove('hidden');$('aiVideoStatus').textContent='Video ready.'}catch(e){$('aiVideoStatus').textContent='Video error: '+e.message}finally{btn.disabled=false}};
+updateVideoEstimate();
 load();
 })();
 </script></body></html>
