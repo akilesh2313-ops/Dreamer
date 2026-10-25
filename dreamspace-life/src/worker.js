@@ -68,6 +68,59 @@ export default {
       }
     }
 
+    if (url.pathname === "/api/video-generate" && request.method === "POST") {
+      if (!env.NURETA_API_KEY) return json({ error: "Video generation is not configured. Add NURETA_API_KEY as a Cloudflare Worker secret." }, 503);
+      let body;
+      try { body = await request.json(); } catch { return json({ error: "Request body must be valid JSON." }, 400); }
+      if (body.ageConfirmed !== true) return json({ error: "Confirm that you are 18 or older first." }, 403);
+      const prompt = String(body.prompt || "").trim().slice(0, 3000);
+      const model = ["seahorse-480p", "seahorse-720p", "seahorse-1080p"].includes(body.model) ? body.model : "seahorse-480p";
+      const duration = [5, 8, 10, 12, 15].includes(Number(body.duration)) ? Number(body.duration) : 5;
+      if (!prompt) return json({ error: "Enter a scene prompt first." }, 400);
+      const prohibited = /\\b(minor|underage|child|children|teenager|schoolgirl|schoolboy|non[- ]consensual|rape|revenge porn|deepfake|undress|real person without consent)\\b/i;
+      if (prohibited.test(prompt)) return json({ error: "This prompt cannot be accepted. Use fictional adults and consensual, non-explicit romantic scenes only." }, 400);
+      try {
+        const upstream = await fetch("https://developer.nureta.ai/api/v3/contents/generations/tasks", {
+          method: "POST",
+          headers: { "authorization": "Bearer " + env.NURETA_API_KEY, "content-type": "application/json" },
+          body: JSON.stringify({
+            model,
+            duration,
+            ratio: ["16:9", "9:16", "1:1"].includes(body.ratio) ? body.ratio : "16:9",
+            content: [{ type: "text", text: "Create a non-explicit cinematic romantic scene featuring clearly adult fictional characters. No nudity or explicit sexual acts. Scene: " + prompt }]
+          })
+        });
+        const data = await upstream.json().catch(() => ({}));
+        if (!upstream.ok) return json({ error: data.message || data.error || "The video provider rejected the request (HTTP " + upstream.status + ")." }, upstream.status >= 500 ? 502 : 400);
+        if (!data.id) return json({ error: "The video provider did not return a task ID." }, 502);
+        return json({ id: data.id, status: data.status || "pending", model, duration });
+      } catch (e) {
+        return json({ error: "Could not reach the video provider: " + String(e?.message || e).slice(0, 160) }, 502);
+      }
+    }
+
+    if (url.pathname === "/api/video-status" && request.method === "GET") {
+      if (!env.NURETA_API_KEY) return json({ error: "Video generation is not configured. Add NURETA_API_KEY as a Cloudflare Worker secret." }, 503);
+      const id = String(url.searchParams.get("id") || "");
+      if (!/^cgt-[A-Za-z0-9_-]+$/.test(id)) return json({ error: "A valid task ID is required." }, 400);
+      try {
+        const upstream = await fetch("https://developer.nureta.ai/api/v3/contents/generations/tasks/" + encodeURIComponent(id), {
+          headers: { "authorization": "Bearer " + env.NURETA_API_KEY }
+        });
+        const data = await upstream.json().catch(() => ({}));
+        if (!upstream.ok) return json({ error: data.message || data.error || "Could not retrieve video task." }, upstream.status >= 500 ? 502 : 400);
+        return json({
+          id: data.id,
+          status: data.status,
+          step: data.step || null,
+          video_url: data.status === "succeeded" ? (data.content?.video_url || null) : null,
+          error: data.status === "failed" ? (data.error?.message || data.error || "Video generation failed.") : null
+        });
+      } catch (e) {
+        return json({ error: "Could not reach the video provider: " + String(e?.message || e).slice(0, 160) }, 502);
+      }
+    }
+
     if (url.pathname.startsWith("/api/")) return json({ error: "API route not found." }, 404);
     return env.ASSETS.fetch(request);
   }
