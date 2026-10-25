@@ -77,7 +77,7 @@ export default {
       const model = ["seahorse-480p", "seahorse-720p", "seahorse-1080p"].includes(body.model) ? body.model : "seahorse-480p";
       const duration = [5, 8, 10, 12, 15].includes(Number(body.duration)) ? Number(body.duration) : 5;
       if (!prompt) return json({ error: "Enter a scene prompt first." }, 400);
-      const prohibited = /\\b(minor|underage|child|children|teenager|schoolgirl|schoolboy|non[- ]consensual|rape|revenge porn|deepfake|undress|real person without consent)\\b/i;
+      const prohibited = /\b(minor|underage|child|children|teenager|schoolgirl|schoolboy|non[- ]consensual|rape|revenge porn|deepfake|undress|real person without consent)\b/i;
       if (prohibited.test(prompt)) return json({ error: "This prompt cannot be accepted. Use fictional adults and consensual, non-explicit romantic scenes only." }, 400);
       try {
         const upstream = await fetch("https://developer.nureta.ai/api/v3/contents/generations/tasks", {
